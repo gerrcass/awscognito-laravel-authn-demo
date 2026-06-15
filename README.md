@@ -1,59 +1,66 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# MediCore — Cognito + Laravel + PostgreSQL PoC
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+PoC de autenticación con AWS Cognito y autorización local en PostgreSQL para una app de registros clínicos electrónicos.
 
-## About Laravel
+## Stack
+- Laravel 10 / PHP 8.2
+- PostgreSQL (RDS)
+- AWS Cognito (User Pool + App Client)
+- Docker Compose
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Setup
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+1. **Clonar y levantar Docker:**
+   ```bash
+   docker compose up -d --build
+   ```
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+2. **Instalar dependencias (si no se hizo en el entrypoint):**
+   ```bash
+   docker compose exec app composer install
+   ```
 
-## Learning Laravel
+3. **Ejecutar migraciones:**
+   ```bash
+   docker compose exec app php artisan migrate --force
+   ```
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+4. **Ejecutar seeders:**
+   ```bash
+   docker compose exec app php artisan db:seed --force
+   ```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+5. **Acceder:**
+   Abrir http://localhost:8080/login
 
-## Laravel Sponsors
+## Usuarios de prueba (Cognito)
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+| Usuario | Contraseña | Rol esperado |
+|---------|-----------|-------------|
+| ADMIN | AdminTest#123456 | admin |
+| ENFERMERA | EnfermeraTest#123456 | enfermera |
+| CAJERO | CajeroTest#123456 | cajero |
+| INACTIVO | (no existe en Cognito) | cajero (inactivo) |
 
-### Premium Partners
+## Pruebas por rol
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+- **ADMIN:** puede acceder a Dashboard, Usuarios, Pacientes, Caja.
+- **ENFERMERA:** puede acceder a Dashboard y Pacientes. NO Usuarios.
+- **CAJERO:** puede acceder a Dashboard y Caja (abrir/cerrar). NO Usuarios.
+- **INACTIVO:** aunque exista en Cognito, no existe en Cognito (pero si en local como inactivo). Si se creara en Cognito, el login sería rechazado por "Usuario no está activo".
 
-## Contributing
+## Arquitectura
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+- **Autenticación:** AWS Cognito `InitiateAuth` con `USER_PASSWORD_AUTH`.
+- **Sesión:** Laravel native `web` guard con sesiones (`SESSION_DRIVER=file`).
+- **Autorización:** Roles y permisos en PostgreSQL (tablas `configuracion.roles`, `configuracion.permissions`, `configuracion.role_has_permissions`).
+- **NO JWT validation** en cada request. Solo sesión Laravel.
+- **NO Cognito Hosted UI**, NO OAuth callbacks, NO User Migration Lambda.
 
-## Code of Conduct
+## Configuración
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Las variables de entorno están en `.env`. Claves Cognito:
+- `COGNITO_USER_POOL_ID`
+- `COGNITO_CLIENT_ID`
+- `COGNITO_CLIENT_SECRET`
+- `COGNITO_REGION`
