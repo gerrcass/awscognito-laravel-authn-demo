@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8080:80"
+    volumes:
+      - .:/var/www/html
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+    command: >
+      bash -c "
+        composer install --no-interaction &&
+        php artisan migrate --force &&
+        php artisan db:seed --force &&
+        apache2-foreground
+      "
