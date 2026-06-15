@@ -13,7 +13,5 @@ services:
     command: >
       bash -c "
         composer install --no-interaction &&
-        php artisan migrate --force &&
-        php artisan db:seed --force &&
         apache2-foreground
       "
