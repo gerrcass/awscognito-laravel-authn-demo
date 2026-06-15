@@ -2,7 +2,7 @@
 
 ## 1. Contexto
 
-Este proyecto es una demostración aislada (PoC) del patrón arquitectónico de la aplicación real **Total360**:
+Este proyecto es una demostración aislada (PoC) del patrón arquitectónico de la aplicación real **MediCore**:
 
 - **Autenticación:** AWS Cognito (User Pool + App Client).
 - **Autorización:** PostgreSQL + roles/permisos en Laravel (inspirado en `spatie/laravel-permission`).
@@ -33,7 +33,7 @@ Validar el flujo completo:
 ## 4. Variables de Entorno (.env)
 
 ```env
-APP_NAME=Total360-PoC
+APP_NAME=MediCore-PoC
 APP_ENV=local
 APP_DEBUG=true
 APP_URL=http://localhost:8080
