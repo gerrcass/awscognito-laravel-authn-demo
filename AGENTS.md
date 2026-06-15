@@ -27,7 +27,7 @@
    - `User` → `belongsTo(Role, role_user)` (un solo rol por usuario)
    - `Role` → `hasMany(Permission)` (many-to-many vía pivot)
    - Helper `User::hasPerm(string $name)` para verificar permisos
-   - Permisos verificados en controllers (no middleware, por compatibilidad con Laravel 12)
+   - Permisos verificados en controllers (no middleware, por compatibilidad con Laravel 12; en la app real con Laravel 10 se puede usar middleware vía `app/Http/Kernel.php`)
 
 3. **Critical Files:**
    - `app/Services/Auth/CognitoAuthService.php` — wrapper de AWS SDK

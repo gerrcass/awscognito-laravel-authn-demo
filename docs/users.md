@@ -51,17 +51,17 @@ Esta es una **demostración (PoC)** de un sistema de registros clínicos electr�
 - **Paso 9:** Cierra sesión cuando termines
 
 ### 4. Probar usuario INACTIVO
-- **Paso 1:** Ve a `/login`, ingresa `INACTIVO` / `CajeroTest#123456`
-- **Paso 2:** Verás el mensaje de error: **"Usuario no está activo"**
-- **Paso 3:** El usuario existe en la base de datos local pero está marcado como INACTIVO
-- **Paso 4:** Nota: El usuario `INACTIVO` no existe en Cognito (es solo para pruebas locales)
+- **Paso 1:** El usuario `INACTIVO` existe en la base de datos local pero **no existe en Cognito**.
+- **Paso 2:** Si intentas ingresar `INACTIVO` / `CajeroTest#123456` → verás **"Usuario o contraseña incorrectos"** (porque Cognito no reconoce al usuario).
+- **Paso 3:** Para probar el estado INACTIVO, primero tendrías que crear el usuario `INACTIVO` en Cognito Console con password `CajeroTest#123456`, luego intentar login → verías **"Usuario no está activo"**.
+- **Paso 4:** El usuario `INACTIVO` en la base de datos local tiene `status = 'INACTIVO'` y rol `cajero`. Sirve para demostrar que incluso si Cognito autentica, el sistema local puede rechazar al usuario por su estado.
 
 ### 5. Verificar persistencia de cognito_sub
 - **Paso 1:** Inicia sesión como cualquier usuario (ej: ADMIN)
 - **Paso 2:** Ve a **Usuarios** (solo disponible para ADMIN)
 - **Paso 3:** Verás la columna **Cognito Sub** que muestra el UUID vinculado al usuario de Cognito
-- **Paso 4:** Este UUID se guarda automáticamente en la primera sesión exitosa
-- **Paso 5:** En sesiones posteriores, el sistema usa este UUID para identificar al usuario (más rápido que buscar por email)
+- **Paso 4:** Este UUID viene del **IdToken JWT** que Cognito devuelve en el login. Se guarda automáticamente en la base de datos local (`configuracion.users.cognito_sub`) en la primera sesión exitosa.
+- **Paso 5:** En **nuevos intentos de login** (posteriores), el sistema busca primero por `cognito_sub` en la BD local. Si encuentra el usuario, evita buscar por `email` (username), haciendo la resolución más directa.
 
 ### 6. Probar logout
 - **Paso 1:** Inicia sesión como cualquier usuario
@@ -112,7 +112,13 @@ A: En el sistema real, `configuracion.users.email` se usa como username legacy (
 A: Es el UUID único del usuario en AWS Cognito. Se guarda en la primera sesión exitosa para identificar al usuario rápidamente en sesiones posteriores.
 
 **Q: ¿Por qué no veo un token JWT en cada request?**
-A: Este PoC usa sesiones Laravel nativas (`SESSION_DRIVER=file`). El JWT de Cognito solo se usa durante el login para validar credenciales. Después del login, solo existe la sesión Laravel.
+A: Este PoC usa sesiones Laravel nativas (`SESSION_DRIVER=file`). El JWT de Cognito (IdToken) solo se usa durante el login para validar credenciales y extraer el `sub` (UUID del usuario). Después del login, solo existe la sesión Laravel.
+
+**Q: ¿Dónde está el JWT de Cognito? ¿Puedo verlo en el navegador?**
+A: No. El JWT de Cognito (IdToken) solo existe en memoria del servidor durante el login (`CognitoAuthService::authenticate()`). El servidor lo recibe, decodifica el payload para obtener el `sub`, y luego lo descarta. No se envía al navegador. El cookie que ves (`medicore-poc-session`) es la **sesión de Laravel encriptada** — es completamente diferente del JWT de Cognito. Para ver el JWT de Cognito, tendrías que añadir un `dd($result)` o `Log::info()` en `CognitoAuthService::authenticate()` después de la llamada a `initiateAuth()`.
+
+**Q: ¿Por qué la sesión de Laravel se encripta?**
+A: Laravel encripta las cookies de sesión por seguridad (configurable en `config/session.php`). El valor que ves en DevTools (`eyJpdiI6...`) no es el JWT de Cognito; es la sesión de Laravel serializada y encriptada. Contiene el `user_id` del usuario autenticado, el CSRF token, y otros datos de sesión.
 
 ---
 

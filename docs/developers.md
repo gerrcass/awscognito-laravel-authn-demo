@@ -2,7 +2,7 @@
 
 ## ¿Qué es este proyecto?
 
-Este es un **Proof of Concept (PoC)** que demuestra cómo integrar **AWS Cognito** para autenticación con **autorización local en PostgreSQL** dentro de una aplicación Laravel. No es una app de producción completa; es un **patrón arquitectónico validado** que se puede replicar en la aplicación real (Total360).
+Este es un **Proof of Concept (PoC)** que demuestra cómo integrar **AWS Cognito** para autenticación con **autorización local en PostgreSQL** dentro de una aplicación Laravel. No es una app de producción completa; es un **patrón arquitectónico validado** que se puede replicar en la aplicación real.
 
 ## Objetivo de esta guía
 
@@ -79,7 +79,9 @@ $request->session()->regenerate();
 
 **Archivo:** `app/Services/Auth/CognitoAuthService.php`
 
-Los usuarios en Cognito pueden estar en estado "Force change password". El servicio detecta el challenge `NEW_PASSWORD_REQUIRED` y responde automáticamente con la misma contraseña:
+Los usuarios en Cognito pueden estar en estado "Force change password". El servicio detecta el challenge `NEW_PASSWORD_REQUIRED` y responde automáticamente con la misma contraseña (workaround para este PoC):
+
+> **Nota para producción:** En la app real, si el usuario está en estado `Force change password`, deberías redirigirlo a una pantalla de cambio de contraseña donde el usuario ingrese su nueva contraseña, y luego llamar a `respondToAuthChallenge` con `NEW_PASSWORD` proporcionada por el usuario. El workaround aquí (usar la misma contraseña temporal) es solo para facilitar las pruebas del PoC.
 
 ```php
 if (isset($result['ChallengeName']) && $result['ChallengeName'] === 'NEW_PASSWORD_REQUIRED') {
@@ -107,6 +109,8 @@ $request->session()->regenerateToken();
 ```
 
 Solo destruye la sesión Laravel. **NO** invalida el token Cognito (por diseño).
+
+> **¿Por qué no invalidamos el token Cognito?** El token de Cognito (AccessToken, IdToken) es de corta duración (1 hora por defecto) y es emitido por Cognito. Para invalidarlo de forma remota habría que usar `GlobalSignOut` o `AdminUserGlobalSignOut`, lo cual añade complejidad y latencia. En una app web tradicional con sesiones Laravel, la sesión es el mecanismo de control de acceso; el token Cognito solo se usa durante el login. Invalidar la sesión Laravel es suficiente para bloquear al usuario. Además, el RefreshToken (válido por 30 días) persistiría de todos modos, lo que requeriría lógica adicional de revocación que escapa al alcance de este patrón.
 
 ---
 
@@ -156,7 +160,9 @@ public function index(Request $request)
 }
 ```
 
-**Decisión:** Los permisos se verifican en los **controllers**, no en middleware. Esto es porque Laravel 12 cambió la forma de registrar middleware y las claves de alias (`'permission'`) no funcionan correctamente con `Route::middleware()`. En la app real, puedes usar middleware si prefieres, pero este PoC usa controller-level checks para máxima compatibilidad.
+**Decisión:** Los permisos se verifican en los **controllers**, no en middleware. Esto es porque este PoC usa Laravel 12, donde el registro de middleware aliases (`'permission'`) en `bootstrap/app.php` no funciona correctamente con `Route::middleware()` en este contexto. 
+
+> **Para la app real (Laravel 10):** Tu app usa `"laravel/framework": "^10.0"`, donde sí tienes `app/Http/Kernel.php` con `$routeMiddleware`. Allí puedes registrar `'permission' => \App\Http\Middleware\CheckPermission::class` y usar `Route::middleware('permission:users.manage')` directamente en las rutas. Las vistas blade aquí usan `hasPerm()` directamente; en la app real puedes usar middleware si lo prefieres. Este PoC usa controller-level checks para máxima compatibilidad.
 
 ---
 
@@ -174,9 +180,21 @@ public function index(Request $request)
 
 ### Para adaptar:
 
-- **Tablas:** En la app real, probablemente ya tienes `configuracion.users` con campos similares. Adapta las migraciones.
+- **Tablas:** En la app real, el DBA gestiona el schema directamente (no se usan migraciones de Laravel). Los cambios en `configuracion.users` (añadir `cognito_sub`, etc.) se hacen directamente en la base de datos. Adapta los modelos Eloquent (`$table`, `$fillable`) para reflejar los campos existentes.
 - **Seeders:** En la app real, los usuarios y roles ya existen. Ajusta `RoleSeeder` y `UserSeeder`.
 - **Vistas:** En la app real, usarás tu propio sistema de UI. Las vistas Blade aquí son solo para demostración.
+
+---
+
+## ¿Por qué `aws/aws-sdk-php` y no Socialite o `ellaisys/aws-cognito`?
+
+| Opción | ¿Por qué no se usó? |
+|--------|---------------------|
+| **Laravel Socialite** | Diseñado para OAuth 2.0 (Google, GitHub, etc.). Cognito con `InitiateAuth` (flujo directo username/password) no es OAuth. Socialite no soporta `USER_PASSWORD_AUTH`. |
+| **ellaisys/aws-cognito** | Usa OAuth Authorization Code flow con Cognito Hosted UI. Este PoC explícitamente **NO** usa Hosted UI ni OAuth callbacks. Además, la librería introduce abstracciones innecesarias para este patrón simple. |
+| **aws/aws-sdk-php** | Librería oficial de AWS. Da control total sobre `CognitoIdentityProviderClient::initiateAuth()`. Permite manejar challenges (`NEW_PASSWORD_REQUIRED`), SECRET_HASH, y decodificar el IdToken directamente. Es la opción más directa y transparente. |
+
+> **Conclusión:** Se eligió `aws/aws-sdk-php` porque este patrón usa Cognito como **servicio de validación de credenciales** (reemplazando `Hash::check()`) dentro de un login custom Laravel, no como proveedor OAuth. Necesitamos control directo sobre `InitiateAuth`, no abstracciones de OAuth.
 
 ---
 
@@ -197,7 +215,7 @@ COGNITO_ENABLED=true
 - **Authentication flows:** `ALLOW_USER_PASSWORD_AUTH` (Username and password) y `ALLOW_REFRESH_TOKEN_AUTH`
 - **NO Hosted UI**
 - **NO OAuth callbacks**
-- **Sign-in identifier:** Username
+- **Sign-in identifier:** Username (elegido como ejemplo para este PoC; ajustable según la configuración de tu User Pool)
 
 ---
 
@@ -207,12 +225,12 @@ COGNITO_ENABLED=true
 
 - El JWT Cognito expira cada 1 hora. Mantenerlo en cada request requiere refresh tokens y lógica compleja.
 - La sesión Laravel es más simple y suficiente para una app web tradicional.
-- El JWT solo se usa para **autenticar** en el login, no para **autorizar** en cada request.
+- El JWT solo se usa para **autenticar (authN)** en el login, no para **autorizar (authZ)** en cada request.
 
 ### ¿Por qué roles/permisos locales en PostgreSQL?
 
-- Cognito no tiene un sistema de RBAC granular (roles, permisos, múltiples roles por usuario).
-- La app real ya usa `spatie/laravel-permission` (o un sistema similar). Mantener la autorización local permite migración gradual.
+- La app real ya tiene todo el mecanismo de autorización (roles, permisos) implementado en Laravel. No se quiere migrar a un sistema RBAC externo.
+- Mantener la autorización local permite reutilizar el sistema existente sin cambios significativos.
 
 ### ¿Por qué un solo rol por usuario?
 
