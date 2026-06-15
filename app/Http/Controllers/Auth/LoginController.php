@@ -34,8 +34,8 @@ class LoginController extends Controller
 
         $sub = $result['sub'];
 
-        $user = User::where('cognito_sub', $sub)->first()
-            ?? User::where('email', $username)->first();
+        $user = !empty($sub) ? User::where('cognito_sub', $sub)->first() : null;
+        $user = $user ?? User::where('email', $username)->first();
 
         if (!$user) {
             return back()->withErrors(['email' => 'Usuario no registrado en el sistema'])->withInput();

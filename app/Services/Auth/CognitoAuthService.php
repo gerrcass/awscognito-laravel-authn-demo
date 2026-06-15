@@ -40,6 +40,20 @@ class CognitoAuthService
                 ],
             ]);
 
+            // Handle NEW_PASSWORD_REQUIRED challenge
+            if (isset($result['ChallengeName']) && $result['ChallengeName'] === 'NEW_PASSWORD_REQUIRED') {
+                $result = $this->client->respondToAuthChallenge([
+                    'ChallengeName' => 'NEW_PASSWORD_REQUIRED',
+                    'ClientId' => $clientId,
+                    'ChallengeResponses' => [
+                        'USERNAME' => $username,
+                        'NEW_PASSWORD' => $password,
+                        'SECRET_HASH' => $secretHash,
+                    ],
+                    'Session' => $result['Session'],
+                ]);
+            }
+
             $idToken = $result['AuthenticationResult']['IdToken'] ?? null;
             $payload = $this->decodeJwtPayload($idToken);
 
@@ -55,6 +69,7 @@ class CognitoAuthService
                 'success' => false,
                 'error' => match ($errorCode) {
                     'NotAuthorizedException', 'UserNotFoundException' => 'Usuario o contraseña incorrectos',
+                    'InvalidPasswordException' => 'La contraseña no cumple con los requisitos de seguridad',
                     default => 'Error de autenticación. Intente nuevamente',
                 },
             ];
