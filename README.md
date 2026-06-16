@@ -102,3 +102,5 @@ Las variables de entorno están en `.env`. Claves Cognito:
 - `COGNITO_CLIENT_ID`
 - `COGNITO_CLIENT_SECRET`
 - `COGNITO_REGION`
+
+> **Nota sobre `COGNITO_ENABLED`:** Aunque no está implementado en el código actual, esta variable de entorno podría usarse como un *feature toggle* para alternar entre autenticación vía Cognito (`true`) y un mecanismo local de desarrollo (`false`, por ejemplo `Auth::attempt` con hashes locales). Esto sería útil para trabajar offline o en entornos sin conectividad a AWS, evitando depender de la red para probar flujos de autorización.
