@@ -207,8 +207,9 @@ COGNITO_REGION=us-east-1
 COGNITO_USER_POOL_ID=us-east-1_yw9xmJJ5a
 COGNITO_CLIENT_ID=3p2ktopgdch4ckpm1f0qaharoc
 COGNITO_CLIENT_SECRET=1bepfcgk6c9ecqc44jj0g5ahuaj9edfrmubjsj7gftnuthtf4pq4
-COGNITO_ENABLED=true
 ```
+
+> **Nota sobre `COGNITO_ENABLED`:** No está implementado en el código actual, pero podría usarse como un *feature toggle* para alternar entre autenticación Cognito (`true`) y un mecanismo local de desarrollo (`false`, por ejemplo `Auth::attempt` con hashes locales). Útil para trabajar offline sin conectividad a AWS.
 
 ### Configuración del App Client en Cognito
 
@@ -247,20 +248,47 @@ COGNITO_ENABLED=true
 
 ## Testing local
 
+El stack usa **PostgreSQL local dentro de Docker** por defecto. No necesitas credenciales RDS ni conectividad a AWS para probar el flujo de autorización local.
+
 ```bash
-# Levantar Docker
+# 1. Preparar entorno
+cp .env.example .env
+# (si no tienes APP_KEY, generarlo: docker compose run --rm app php artisan key:generate)
+
+# 2. Levantar Docker (app + PostgreSQL local)
 docker compose up -d --build
 
-# Instalar dependencias
+# 3. Instalar dependencias (si no se hizo en entrypoint)
 docker compose exec app composer install
 
-# Migraciones y seeders
+# 4. Migraciones y seeders
 docker compose exec app php artisan migrate --force
 docker compose exec app php artisan db:seed --force
 
-# Acceder
+# 5. Acceder
 http://localhost:8080/login
 ```
+
+### Usar RDS en lugar de PostgreSQL local
+
+Para apuntar a RDS (o cualquier PostgreSQL remoto), edita `.env`:
+
+```env
+DB_HOST=tu-rds-host.rds.amazonaws.com
+DB_PORT=5432
+DB_DATABASE=tu_base
+DB_USERNAME=tu_usuario
+DB_PASSWORD="tu_password"
+DB_SSLMODE=require
+```
+
+Reinicia el contenedor:
+
+```bash
+docker compose restart app
+```
+
+> El servicio `db` del `docker-compose.yml` puede seguir levantado o detenerse; la app solo lo usa si `DB_HOST=db`.
 
 ### Usuarios de prueba
 
@@ -275,6 +303,6 @@ http://localhost:8080/login
 ## Notas adicionales
 
 - **Session driver:** `file` (por defecto en Laravel). En producción, considera Redis o database.
-- **SSL:** RDS requiere `sslmode=require` en `config/database.php` para PostgreSQL.
+- **SSL:** `config/database.php` usa `sslmode=prefer` por defecto. Esto intenta SSL cuando está disponible (RDS) pero no falla en conexiones locales sin SSL. Para RDS explícito, usa `DB_SSLMODE=require` en `.env`.
 - **Cognito users:** En `us-east-1`. RDS en `us-east-2`. Están en regiones diferentes intencionalmente.
 - **Docker:** El contenedor usa `php:8.2-apache` con `pdo_pgsql` y `pgsql` extensions.

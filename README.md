@@ -4,34 +4,64 @@ PoC de autenticación con AWS Cognito y autorización local en PostgreSQL para u
 
 ## Stack
 - Laravel 12 / PHP 8.2
-- PostgreSQL (RDS)
+- PostgreSQL (local por defecto, RDS opcional)
 - AWS Cognito (User Pool + App Client)
 - Docker Compose
 
 ## Setup
 
-1. **Clonar y levantar Docker:**
+1. **Preparar entorno:**
+   ```bash
+   cp .env.example .env
+   # (opcional) Generar APP_KEY si no existe:
+   docker compose run --rm app php artisan key:generate
+   ```
+
+2. **Levantar Docker (incluye PostgreSQL local):**
    ```bash
    docker compose up -d --build
    ```
 
-2. **Instalar dependencias (si no se hizo en el entrypoint):**
+3. **Instalar dependencias (si no se hizo en el entrypoint):**
    ```bash
    docker compose exec app composer install
    ```
 
-3. **Ejecutar migraciones:**
+4. **Ejecutar migraciones:**
    ```bash
    docker compose exec app php artisan migrate --force
    ```
 
-4. **Ejecutar seeders:**
+5. **Ejecutar seeders:**
    ```bash
    docker compose exec app php artisan db:seed --force
    ```
 
-5. **Acceder:**
+6. **Acceder:**
    Abrir http://localhost:8080/login
+
+### Usar RDS en producción / desarrollo remoto
+
+Por defecto el stack usa PostgreSQL local dentro de Docker. Para apuntar a una instancia RDS (u otra PostgreSQL remota), edita `.env`:
+
+```env
+DB_HOST=tu-rds-host.rds.amazonaws.com
+DB_PORT=5432
+DB_DATABASE=tu_base
+DB_USERNAME=tu_usuario
+DB_PASSWORD="tu_password_con_especiales"
+DB_SSLMODE=require
+```
+
+> **Importante:** si el password contiene `#` u otros caracteres especiales, envuélvelo entre comillas dobles.
+
+Luego reinicia el contenedor:
+
+```bash
+docker compose restart app
+```
+
+El servicio `db` del `docker-compose.yml` puede seguir levantado o detenerse; la app solo lo usa si `DB_HOST=db`.
 
 ## Usuarios de prueba (Cognito)
 
